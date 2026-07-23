@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Line Tapper</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#080808; color:#ccc; font-family:'Segoe UI',sans-serif; display:flex; height:100vh; overflow:hidden; }
+
+  #left { flex:1; display:flex; flex-direction:column; border-right:1px solid #222; }
+
+  #player { background:#111; padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #222; }
+  #player button { padding:8px 20px; font-size:1em; background:#1a1a1a; color:#00ff66; border:1px solid #00ff66; border-radius:4px; cursor:pointer; font-weight:bold; }
+  #player button:hover { background:#00ff66; color:#000; }
+  #timer { font-family:'Consolas',monospace; font-size:1.8em; color:#00ff66; min-width:100px; }
+  #seek { flex:1; accent-color:#00ff66; height:6px; }
+  #speed { background:#1a1a1a; color:#aaa; border:1px solid #333; padding:4px 8px; border-radius:4px; }
+
+  #lyrics { flex:1; overflow-y:auto; padding:8px 0; }
+
+  .section-header {
+    padding:6px 16px; font-size:0.75em; font-weight:bold; color:#00ff66;
+    text-transform:uppercase; letter-spacing:2px; background:#0a1a0f;
+    border-top:1px solid #1a3320; margin-top:4px;
+    position:sticky; top:0; z-index:1;
+  }
+
+  .line-row {
+    display:flex; align-items:center; padding:6px 16px; cursor:pointer;
+    border-bottom:1px solid #111; transition:background 0.1s;
+  }
+  .line-row:hover { background:#151520; }
+  .line-row.marked { background:#0d1a12; }
+  .line-row.active { background:#1a1a00; }
+  .line-row.backing { opacity:0.6; font-style:italic; }
+
+  .line-num { width:28px; color:#444; font-size:0.75em; font-family:monospace; }
+  .line-text { flex:1; font-size:0.95em; line-height:1.4; }
+  .line-text.shouted { color:#fff; font-weight:bold; text-transform:uppercase; }
+  .line-stamp {
+    min-width:70px; text-align:right; font-family:'Consolas',monospace;
+    font-size:0.85em; color:#00ff66; font-weight:bold;
+  }
+  .line-stamp.empty { color:#333; }
+
+  #right { width:340px; display:flex; flex-direction:column; background:#0a0a0a; }
+  #right h3 { padding:12px 16px; color:#00ff66; font-size:0.9em; border-bottom:1px solid #222; }
+  #instructions { padding:12px 16px; font-size:0.8em; color:#666; line-height:1.6; border-bottom:1px solid #222; }
+  #instructions kbd { background:#222; color:#aaa; padding:2px 6px; border-radius:3px; font-size:0.85em; }
+  #output { flex:1; padding:12px 16px; font-family:'Consolas',monospace; font-size:0.8em; overflow-y:auto; white-space:pre-wrap; color:#888; }
+  #export-btn {
+    margin:12px 16px; padding:10px; background:#00ff66; color:#000;
+    border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1em;
+  }
+  #export-btn:hover { background:#00dd55; }
+  #clear-btn {
+    margin:0 16px 12px; padding:8px; background:#1a1a1a; color:#ff4444;
+    border:1px solid #ff4444; border-radius:6px; cursor:pointer; font-size:0.85em;
+  }
+</style>
+</head>
+<body>
+
+<div id="left">
+  <div id="player">
+    <button onclick="togglePlay()" id="play-btn">PLAY</button>
+    <div id="timer">0:00.0</div>
+    <input type="range" id="seek" min="0" max="1000" value="0" step="1" oninput="seekTo(this.value)">
+    <select id="speed" onchange="setSpeed(this.value)">
+      <option value="1">1x</option>
+      <option value="0.75">0.75x</option>
+      <option value="0.5">0.5x</option>
+    </select>
+  </div>
+  <div id="lyrics"></div>
+</div>
+
+<div id="right">
+  <h3>LINE TAPPER</h3>
+  <div id="instructions">
+    <kbd>Space</kbd> Play / Pause<br>
+    <kbd>Click line</kbd> Stamp current time<br>
+    <kbd>Left/Right</kbd> Seek +/-2s<br>
+    <kbd>Shift+Left/Right</kbd> Seek +/-0.5s (fine)<br>
+    <kbd>R</kbd> Restart from 0<br><br>
+    Listen and click each line <strong>the moment you hear it start</strong>.
+    Lines auto-scroll to follow playback. Re-click to re-stamp.
+    Export when done.
+  </div>
+  <button id="export-btn" onclick="exportAll()">EXPORT TIMESTAMPS</button>
+  <button id="clear-btn" onclick="clearAll()">Clear All</button>
+  <div id="output"></div>
+</div>
+
+<script>
+// === INJECTED BY SKILL — DO NOT HARDCODE ===
+const data = LYRICS_DATA_PLACEHOLDER;
+const audioPath = "AUDIO_PATH_PLACEHOLDER";
+// === END INJECTION ===
+
+const allLines = [];
+let lineNum = 0;
+data.forEach(sec => {
+  sec.startLineIdx = lineNum;
+  sec.lines.forEach(l => {
+    allLines.push({ ...l, section: sec.tag, globalIdx: lineNum, stamp: null });
+    lineNum++;
+  });
+});
+
+const audio = new Audio();
+audio.src = audioPath;
+
+const lyricsEl = document.getElementById('lyrics');
+const timerEl = document.getElementById('timer');
+const seekEl = document.getElementById('seek');
+const outputEl = document.getElementById('output');
+
+data.forEach(sec => {
+  const hdr = document.createElement('div');
+  hdr.className = 'section-header';
+  hdr.textContent = sec.tag;
+  lyricsEl.appendChild(hdr);
+
+  sec.lines.forEach((l, li) => {
+    const idx = sec.startLineIdx + li;
+    const row = document.createElement('div');
+    row.className = 'line-row' + (l.style === 'backing' ? ' backing' : '');
+    row.id = 'line-' + idx;
+    row.innerHTML =
+      '<span class="line-num">' + (idx + 1) + '</span>' +
+      '<span class="line-text' + (l.style === 'shouted' ? ' shouted' : '') + '">' + l.text + '</span>' +
+      '<span class="line-stamp empty" id="stamp-' + idx + '">--:--.-</span>';
+    row.onclick = () => stampLine(idx);
+    lyricsEl.appendChild(row);
+  });
+});
+
+function formatTime(t) {
+  const m = Math.floor(t / 60);
+  const s = (t % 60).toFixed(1).padStart(4, '0');
+  return m + ':' + s;
+}
+
+function togglePlay() {
+  if (audio.paused) { audio.play(); document.getElementById('play-btn').textContent = 'PAUSE'; }
+  else { audio.pause(); document.getElementById('play-btn').textContent = 'PLAY'; }
+}
+
+function seekTo(val) {
+  if (audio.duration) audio.currentTime = (val / 1000) * audio.duration;
+}
+
+function setSpeed(v) { audio.playbackRate = parseFloat(v); }
+
+function stampLine(idx) {
+  const t = audio.currentTime;
+  allLines[idx].stamp = t;
+  const el = document.getElementById('line-' + idx);
+  el.classList.add('marked');
+  document.getElementById('stamp-' + idx).textContent = formatTime(t);
+  document.getElementById('stamp-' + idx).classList.remove('empty');
+}
+
+function clearAll() {
+  allLines.forEach((l, i) => {
+    l.stamp = null;
+    document.getElementById('line-' + i).classList.remove('marked');
+    const s = document.getElementById('stamp-' + i);
+    s.textContent = '--:--.-';
+    s.classList.add('empty');
+  });
+  outputEl.textContent = '';
+}
+
+let lastHighlight = -1;
+setInterval(() => {
+  const t = audio.currentTime;
+  timerEl.textContent = formatTime(t);
+  if (audio.duration) seekEl.value = (t / audio.duration) * 1000;
+
+  let closest = -1;
+  allLines.forEach((l, i) => {
+    if (l.stamp !== null && l.stamp <= t + 0.5) closest = i;
+  });
+
+  if (closest !== lastHighlight) {
+    if (lastHighlight >= 0) document.getElementById('line-' + lastHighlight)?.classList.remove('active');
+    if (closest >= 0) {
+      const el = document.getElementById('line-' + closest);
+      el?.classList.add('active');
+      el?.scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+    lastHighlight = closest;
+  }
+}, 100);
+
+function exportAll() {
+  let out = '';
+  let currentSec = '';
+  allLines.forEach(l => {
+    if (l.section !== currentSec) {
+      currentSec = l.section;
+      out += '\n[' + currentSec + ']\n';
+    }
+    const ts = l.stamp !== null ? l.stamp.toFixed(2) + 's' : 'MISSING';
+    out += ts + ' | ' + l.text + '\n';
+  });
+  outputEl.textContent = out.trim();
+  navigator.clipboard.writeText(out.trim()).catch(()=>{});
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowLeft') {
+    e.preventDefault();
+    audio.currentTime = Math.max(0, audio.currentTime - (e.shiftKey ? 0.5 : 2));
+  }
+  if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    audio.currentTime = Math.min(audio.duration || 999, audio.currentTime + (e.shiftKey ? 0.5 : 2));
+  }
+  if (e.code === 'KeyR' && !e.ctrlKey) { audio.currentTime = 0; }
+});
+</script>
+</body>
+</html>

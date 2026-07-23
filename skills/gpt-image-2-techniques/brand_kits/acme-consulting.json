@@ -1,0 +1,35 @@
+{
+  "name": "acme-consulting",
+  "title": "Acme Consulting — Generic B2B consulting brand kit template",
+  "_usage_note": "This is a starter template. Copy it, rename it, and customize all fields for your own brand. Every field is a placeholder — change palette, typography, voice, and wordmark to match your identity.",
+  "palette": {
+    "ink": "#0f172a",
+    "surface": "#1e293b",
+    "elevated": "#334155",
+    "accent": "#3b82f6",
+    "text_primary": "#f1f5f9",
+    "text_muted": "#94a3b8",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "error": "#ef4444"
+  },
+  "typography": {
+    "body": "Inter",
+    "mono": "JetBrains Mono",
+    "display": "Inter Black"
+  },
+  "voice": "Professional, evidence-based, client-first. Avoid jargon. Lead with outcomes, not methodology.",
+  "wordmark": "acme-consulting",
+  "wordmark_full": "Acme Consulting LLC",
+  "logo_description": "Placeholder — describe your logo here so GPT-Image-2 can reproduce it or respect its space in generated assets.",
+  "background_default": "deep navy #0f172a with subtle dot-grid texture at 4% opacity",
+  "negatives": [
+    "no stock photography",
+    "no generic corporate blue gradients",
+    "no lorem ipsum placeholder text",
+    "no watermarks",
+    "no duplicate text"
+  ],
+  "languages": ["en"],
+  "example_prompt_use": "Replace 'acme-consulting' with your kit name, update palette hex values, typography, and voice. Pass this file as the brand_kit argument when calling gpt-image-2-techniques."
+}

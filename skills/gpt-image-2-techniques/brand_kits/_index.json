@@ -1,0 +1,12 @@
+{
+  "_comment": "Registered brand kits. Each kit has its own JSON file in this folder. Copy acme-consulting.json to create your own.",
+  "kits": [
+    {
+      "name": "acme-consulting",
+      "file": "acme-consulting.json",
+      "default": true,
+      "languages": ["en"],
+      "_note": "Generic starter template — copy and customize for your own brand"
+    }
+  ]
+}
